@@ -1,57 +1,116 @@
-# Ansible Role: MyRole (POC with Molecule & Docker)
+# Ansible Unit Test POC
 
-This POC shows how to write an Ansible role and test it using Molecule with the Docker driver.
+<img width="1148" height="454" alt="Screenshot from 2025-07-11 02-03-43" src="https://github.com/user-attachments/assets/0997b546-31bd-4677-9c14-41d409bf90cf" />
+
+---
+| **Author** | **Created On** | **Version** | **Last Edited** | **Review Level** | **Reviewer** |
+|------------|----------------|-------------|------------------|------------------|--------------|
+| Shivani Narula| *09-07-2025*   | v1.0        | *--*             | L0  | Rajkumar Chauhan |
 
 ---
 
-## 🛠️ What This Role Does
+##   Table of Contents
 
-- Installs Apache2
-- Starts and enables the Apache service (skips in Docker containers)
+1. [Objective](#objective)
+2. [Tools Required](#tools-required)
+3. [Directory Structure](#directory-structure)
+4. [Playbook](#playbook)
+5. [⚙Molecule Configuration](#molecule-configuration)
+6. [Converge Playbook](#converge-playbook)
+7. [Testinfra Tests](#testinfra-tests)
+8. [Run the POC](#run-the-poc)
+9. [Conclusion](#conclusion)
+10. [Contact](#contact)
+11. [References](#references)
 
 ---
 
-## 📁 Folder Structure
+##   Objective
 
+This POC demonstrates how to unit test an Ansible playbook using:
+- **Molecule** (for scenario management),
+- **Docker** (to simulate target systems), and
+- **Testinfra** (for writing validation tests in Python).
+
+The goal is to ensure:
+- The playbook runs without errors
+- Server state is validated
+- Code follows Ansible best practices
+
+---
+
+## 🛠 Tools Required
+
+| Tool          | Purpose                         | Installation |
+|---------------|----------------------------------|--------------|
+| Python 3.6+   | For running Molecule & Testinfra | [Python.org](https://www.python.org/downloads/) |
+| pip           | Python package manager          | `sudo apt install python3-pip` |
+| Ansible       | Configuration management         | `pip install ansible` |
+| Docker        | Creates test containers          | [Docker Setup](https://docs.docker.com/get-docker/) |
+| Molecule      | Test framework for Ansible       | `pip install molecule[docker]` |
+| Testinfra     | Python test library for servers  | `pip install testinfra` |
+| Ansible-Lint  | Linter for playbooks             | `pip install ansible-lint` |
+
+---
+
+##   Directory Structure
 ```bash
 ansible-poc-playbook/
 ├── playbook.yml
-└── roles/
-    └── myrole/
-        ├── tasks/
-        │   └── main.yml
-        ├── molecule/
-        │   └── default/
-        │       ├── converge.yml
-        │       └── molecule.yml
-        ├── meta/
-        │   └── main.yml
-        └── README.md
-
+├── molecule/
+│ └── default/
+│ ├── converge.yml
+│ ├── molecule.yml
+│ └── tests/
+│ └── test_playbook.py
 ```
-![Screenshot from 2025-07-09 02-51-24](https://github.com/user-attachments/assets/05c8bac7-e48c-4af3-a048-5a7829f7d090)
+
+<img width="1194" height="497" alt="Screenshot from 2025-07-11 02-08-17" src="https://github.com/user-attachments/assets/639ec735-45f0-47fd-94fb-1aeb644afd42" />
 
 ---
 
 
-## Install Required Tools
+##   Playbook
 
-```bash
-sudo apt update
-sudo apt install docker.io python3-pip python3-venv -y
+**File:** `playbook.yml`
 
-# Create and activate a virtual environment
-python3 -m venv myenv
-source myenv/bin/activate
+```yaml
+- name: Install and configure Apache
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
 
-# Install Ansible and Molecule
-pip install ansible molecule[docker]
+    - name: Install Apache
+      apt:
+        name: apache2
+        state: present
+
+    - name: Start Apache service
+      service:
+        name: apache2
+        state: started
+        enabled: yes
+      when: ansible_virtualization_type != "docker"
+
+    - name: Skip service start in Docker
+      debug:
+        msg: "Skipping start inside Docker"
+      when: ansible_virtualization_type == "docker"
 ```
 
-## Molecule Configuration
-## molecule/default/molecule.yml
-```bash
+<img width="1194" height="497" alt="Screenshot from 2025-07-11 02-10-42" src="https://github.com/user-attachments/assets/a7c0fc9c-7018-4fcf-a136-b866dcaadf59" />
+
+
 ---
+
+##  Molecule Configuration
+ File: molecule/default/molecule.yml
+
+---
+```yaml
 dependency:
   name: galaxy
 
@@ -60,73 +119,102 @@ driver:
 
 platforms:
   - name: instance
-    image: "geerlingguy/docker-ubuntu2204-ansible"
-    command: /lib/systemd/systemd
-    privileged: true
+    image: geerlingguy/docker-ubuntu2004-ansible
     pre_build_image: true
 
 provisioner:
   name: ansible
+  playbooks:
+    converge: converge.yml
 
 verifier:
-  name: ansible
-
+  name: testinfra
 ```
 
+<img width="1204" height="329" alt="Screenshot from 2025-07-11 02-22-25" src="https://github.com/user-attachments/assets/5438e498-0499-4d0c-a127-996b4c0c8dfd" />
 
-![Screenshot from 2025-07-09 18-04-30](https://github.com/user-attachments/assets/69f2f4ac-84c6-403c-9523-d92fd71d7da9)
-
-
-
-## Role Code
-## tasks/main.yml
-```bash
----
-- name: Update apt cache
-  apt:
-    update_cache: yes
-
-- name: Install Apache
-  apt:
-    name: apache2
-    state: present
-
-- name: Start Apache (unless inside Docker)
-  service:
-    name: apache2
-    state: started
-    enabled: yes
-  when: ansible_virtualization_type != "docker"
-
-- name: Message when running in Docker
-  debug:
-    msg: "Skipping start/enable because running inside Docker"
-  when: ansible_virtualization_type == "docker"
-
-
-```
-
-## meta/main.yml
-```bash
-#SPDX-License-Identifier: MIT-0
-```
 ---
 
+##  Converge Playbook
+File: molecule/default/converge.yml
 
-![Screenshot from 2025-07-09 18-11-46](https://github.com/user-attachments/assets/77cf7bef-5d03-4aa1-81d3-0289e132ff34)
+```yaml
+- name: Apply main playbook
+  hosts: all
+  become: yes
+  tasks:
+    - import_playbook: ../../playbook.yml
+```
 
-## Running the Molecule Test
-## Run the following command from inside your role folder:
+<img width="1206" height="94" alt="Screenshot from 2025-07-11 02-24-21" src="https://github.com/user-attachments/assets/d86530f5-163a-4178-aceb-70a495930d40" />
+
+---
+
+## Testinfra Tests
+File: molecule/default/tests/test_playbook.py
+
+```yaml
+import os
+import testinfra.utils.ansible_runner
+
+testinfra_hosts = testinfra.utils.ansible_runner.AnsibleRunner(
+    os.environ["MOLECULE_INVENTORY_FILE"]
+).get_hosts("all")
+
+
+def test_apache_package_installed(host):
+    pkg = host.package("apache2")
+    assert pkg.is_installed
+
+
+def test_apache_service_skipped_in_docker(host):
+    svc = host.service("apache2")
+    assert not svc.is_running
+    assert not svc.is_enabled
+```
+
+<img width="1203" height="295" alt="Screenshot from 2025-07-11 02-26-04" src="https://github.com/user-attachments/assets/a1afe34f-232b-4b99-a6e0-3e88a9661ddc" />
+
+---
+
+## Run The Molecules test
 ```bash
-cd ansible-poc-playbook/roles/myrole
 molecule test
-
 ```
-![Screenshot from 2025-07-09 19-04-16](https://github.com/user-attachments/assets/90a644e3-9856-4cba-bbc8-d6dc5714c7de)
+This runs:
+| **Step**     | **Description**                                          |
+|--------------|----------------------------------------------------------|
+| `lint`       | Runs Ansible linting checks (syntax + style)             |
+| `create`     | Launches Docker container for testing                    |
+| `converge`   | Applies the Ansible playbook to the container            |
+| `verify`     | Runs Testinfra test cases to validate outcome            |
+| `destroy`    | Destroys/removes the test container                      |
+
+<img width="1306" height="725" alt="Screenshot from 2025-07-11 03-25-12" src="https://github.com/user-attachments/assets/e5e04c67-7d40-4488-9504-cbef37724d3e" />
+
+---
+
+# Conclusion
+This POC successfully demonstrates automated unit testing for Ansible playbooks using Molecule and Testinfra.
+
+With this approach:
+
+- You ensure idempotence and correct system state.
+
+- Tests can be integrated into CI/CD pipelines.
+
+- Playbook quality and reliability improve.
 
 
+# Contact Information 
+| Name       | Email Address                |
+|------------|------------------------------|
+|Shivani Narula     |shivani.narula.snaatak@mygurukulam.co|
 
+# References
 
-![Screenshot from 2025-07-09 19-08-30](https://github.com/user-attachments/assets/15a41343-9568-4d68-8aa4-fda1501619f5)
-
+| **Link** | **Description** |
+|------------------------------------------------------|------------------|
+| [Molecule Documentation](https://molecule.readthedocs.io/)%7C Molecule Documentation      |
+| [Testinfra Documentation](https://testinfra.readthedocs.io/)%7C Testinfra Documentation   |
 
